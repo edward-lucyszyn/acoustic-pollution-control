@@ -94,6 +94,14 @@ def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_
             elem_id_to_delete = np.append(elem_id_to_delete, i)
             triangles_to_delete.append(elem2nodes[p_elem2nodes[i]:p_elem2nodes[i+1]])
 
+    plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
+    plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
+    for elemid in elem_id_to_delete:
+        plot_elem(node_coords, p_elem2nodes, elem2nodes, elemid, colorname='blue')
+    matplotlib.pyplot.plot(point_coords[pointid][0], point_coords[pointid][1], 'bo', color='blue')
+    matplotlib.pyplot.title('Test for finding')
+    matplotlib.pyplot.show()
+
     # then the all the points ot the triangles that we removed form a connex polygon whose sides need to be joined with the new point to construct triangles
     all_sides = []
     for triangle in triangles_to_delete:
@@ -113,10 +121,11 @@ def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_
 
     # if it is a unique side, then it makes a triangle with the new point
     for points in all_unique_sides:
-        if is_counterclockwise(node_coords, np.array([points[0], points[1], nodeid])):
-            node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([points[0], points[1], nodeid]))
-        else:
-            node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([points[0], nodeid, points[1]]))
+        if not is_in_segment(node_coords[points[0]], node_coords[points[1]], node_coords[nodeid]):
+            if is_counterclockwise(node_coords, np.array([points[0], points[1], nodeid])):
+                node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([points[0], points[1], nodeid]))
+            else:
+                node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([points[0], nodeid, points[1]]))
 
     # removing the triangles to the mesh
     for elem_id in  np.sort(elem_id_to_delete)[::-1]:
@@ -206,6 +215,8 @@ def is_inside_form(node_coords, borders, point_coords):
     x_max = node_coords[borders[0][0]][0]
     for i in range(len(borders)):
         for j in range(len(borders[i])):
+            if is_in_segment(node_coords[borders[i][j]], node_coords[borders[i][(j+1)%len(borders[i])]], point_coords):
+                return True
             if point_coords[0] == node_coords[borders[i][j]][0] and point_coords[1] == node_coords[borders[i][j]][1]:
                 return True
             elif x_max < node_coords[borders[i][j]][1]:
@@ -282,5 +293,5 @@ if __name__ == '__main__':
     # _test_apply_Delaunay_triangulation()
     # _test_do_intersect()
     # _test_is_inside_form()
-    _test_apply_non_convex_Delaunay_triangulation()
+    # _test_apply_non_convex_Delaunay_triangulation()
     pass

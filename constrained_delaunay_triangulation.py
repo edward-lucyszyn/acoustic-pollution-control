@@ -85,7 +85,7 @@ def _test_is_quadrilateral_convex():
     print(is_quadrilateral_convex(node_coords, 0, 1, 2, 3))
 
 
-def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e2):
+def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e2, show_deleted=False):
     """Adds one constraint to the triangulation. It there is a point on the segment of the 
     constraint, the algorithm does as if there are two edges, from e1 to the point aligned 
     and fom the point aligned to e2."""
@@ -193,7 +193,10 @@ def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e
 
     if first_aligned_point < len(node_coords):
         node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2)
-    return node_coords, p_elem2nodes, elem2nodes
+    if show_deleted:
+        return node_coords, p_elem2nodes, elem2nodes
+    else:
+        return node_coords, p_elem2nodes, elem2nodes, intersecting_triangles
 
 
 def apply_constrained_Delaunay_triangulation(point_coords, nodesid, constraints):

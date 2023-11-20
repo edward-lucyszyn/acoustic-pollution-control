@@ -23,6 +23,34 @@ def is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, elemid, max_area, m
         return False
     
 
+def does_mesh_have_a_bad_angle(node_coords, p_elem2nodes, elem2nodes, min_angle):
+    """Return True if there is an element of the mesh with at least one edge which has too small angle. 
+    Return also the index of the element with the worst angle."""
+    min_angle = np.infty
+    min_index = len(p_elem2nodes)
+    for i in range(len(p_elem2nodes) - 1):
+        elem = elem2nodes[p_elem2nodes[i]:p_elem2nodes[i + 1]]
+        min_angle_of_elem = np.min(triangle_angles_in_degrees(node_coords[elem[0]], node_coords[elem[1]], node_coords[elem[2]]))
+        if min_angle_of_elem < min_angle:
+            min_angle = min_angle_of_elem
+            min_index = i
+    return min_angle < min_angle_of_elem, min_index
+
+
+def does_mesh_have_a_bad_area(node_coords, p_elem2nodes, elem2nodes, max_area):
+    """Return True if there is an element of the mesh with at least one edge which has too small angle. 
+    Return also the index of the element with the worst angle."""
+    area = 0
+    max_index = len(p_elem2nodes)
+    for i in range(len(p_elem2nodes) - 1):
+        elem = elem2nodes[p_elem2nodes[i]:p_elem2nodes[i + 1]]
+        elem_area = triangle_area(node_coords[elem[0]], node_coords[elem[1]], node_coords[elem[2]])
+        if area < elem_area:
+            area = elem_area
+            max_index = i
+    return area > max_area, max_index
+    
+
 def is_node_in_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, nodeid2, coords):
     """Return True if node of the point of coordinates coords is in the diametral circle of the segment formed by nodeid1, nodeid2."""
     return np.linalg.norm(((node_coords[nodeid1] + node_coords[nodeid2])/2) - coords) < np.linalg.norm((node_coords[nodeid1] - node_coords[nodeid2])/2)
@@ -101,15 +129,21 @@ def _test_is_stranger_node_in_a_diametral_circle():
 
 def add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints, borders, coords):
     """Add one point to a non convex constrained Delaunay triangulation. The point coordinates are in the array coords."""
+    plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
+    plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
+    matplotlib.pyplot.plot(coords[0], coords[1], 'bo', color="blue")
+    matplotlib.pyplot.title('Test for adding')
+    matplotlib.pyplot.show()
     if not is_inside_form(node_coords, borders, coords):
-        return node_coords, p_elem2nodes, elem2nodes
+        return node_coords, p_elem2nodes, elem2nodes, np.array([])
     else:
-        node_coords, p_elem2nodes, elem2nodes = add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, np.array([coords]), 0)
+        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted = add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, np.array([coords]), 0, True)
         i = 0
         while i < len(constraints): # for every constraints
-            node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints[i][0], constraints[i][1])
+            node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2 = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints[i][0], constraints[i][1])
+            elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
             i += 1
-    return node_coords, p_elem2nodes, elem2nodes
+    return node_coords, p_elem2nodes, elem2nodes, elem_id_deleted
 
 def _test_add_node_to_non_convex_constrained_delaunay_triangulation():
     node_coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
@@ -159,27 +193,29 @@ def _test_add_node_to_non_convex_constrained_delaunay_triangulation2():
 
 def split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2):
     """Adds the midpoint of a segment into the triangulation. Continues until there is no node in diametral circles of this segment."""
-    print(node_coords, p_elem2nodes, elem2nodes)
+    # print(node_coords, p_elem2nodes, elem2nodes)
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
     plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
     plot_node(node_coords, p_elem2nodes, elem2nodes, nodeid1, colorname='blue')
     plot_node(node_coords, p_elem2nodes, elem2nodes, nodeid2, colorname='blue')
-    matplotlib.pyplot.title('Test for Rupper algorithm')
+    matplotlib.pyplot.title('Test for Ruppert algorithm')
     matplotlib.pyplot.show()
     coords = (node_coords[nodeid1] + node_coords[nodeid2])/2
-    node_coords, p_elem2nodes, elem2nodes = add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints, borders, coords)
+    node_coords, p_elem2nodes, elem2nodes, elem_id_deleted = add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints, borders, coords)
     new_index = len(node_coords) - 1
     result1 = does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, new_index)
     result2 = does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid2, new_index)
     if result1:
-        node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, new_index)
+        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2 = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, new_index)
+        elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
     if result2:
-        node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid2, new_index)
+        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2 = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid2, new_index)
+        elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
     plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-    matplotlib.pyplot.title('Test for Rupper algorithm')
+    matplotlib.pyplot.title('Test for Ruppert algorithm')
     matplotlib.pyplot.show()
-    return node_coords, p_elem2nodes, elem2nodes
+    return node_coords, p_elem2nodes, elem2nodes, elem_id_deleted
 
 def _test_split_segment():
     node_coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0.4, 0.5]])
@@ -194,7 +230,7 @@ def _test_split_segment():
     matplotlib.pyplot.title('Test for split_segment')
     matplotlib.pyplot.show()
 
-    node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+    node_coords, p_elem2nodes, elem2nodes, elem_id_deleted = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
 
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes)
     plot_all_node(node_coords, p_elem2nodes, elem2nodes)
@@ -244,31 +280,56 @@ def _test_add_node_at_circumcenter():
     matplotlib.pyplot.show()
 
 
-def apply_Rupper_algorithm(point_coords, constraints, borders, max_area, min_angle):
-    """Apply the Rupper algorithm with counstraints and borders. Every triangle will have 
+def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle):
+    """Apply the Ruppert algorithm with counstraints and borders. Every triangle will have 
     an area under max_area and angles over min_angle. min_angle is in degree."""
     node_coords, p_elem2nodes , elem2nodes = apply_constrained_non_convex_Delaunay_triangulation(point_coords, constraints, borders)
     n = 0
     i = 0
     while i < len(p_elem2nodes) - 1:
-        result, nodeid1, nodeid2 = does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, i)
-        if result:
-            node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
-            i = 0
-            n += 1
-        elif is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, i, max_area, min_angle):
-            plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
-            plot_elem(node_coords, p_elem2nodes, elem2nodes, i, colorname='green')
-            plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-            matplotlib.pyplot.title('Test for Rupper algorithm')
-            matplotlib.pyplot.savefig('Test for Ruber algorithm n=' + str(n))
-            node_coords, p_elem2nodes, elem2nodes = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, i)
-            i = 0
-            n += 1
-        else: i += 1
+        trigger = False
+        if i ==0:
+            angle_bool, angle_id = does_mesh_have_a_bad_angle(node_coords, p_elem2nodes, elem2nodes, min_angle)
+            if angle_bool:
+                result, nodeid1, nodeid2 = does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, angle_id)
+                if result:
+                    node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+                else:
+                    plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
+                    plot_elem(node_coords, p_elem2nodes, elem2nodes, i, colorname='green')
+                    plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
+                    matplotlib.pyplot.title('Test for Ruppert algorithm')
+                    matplotlib.pyplot.savefig('Test for Ruber algorithm n=' + str(n))
+                    node_coords, p_elem2nodes, elem2nodes = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, angle_id)
+                i = 0
+                n += 1
+                trigger = True
+            else:
+                area_bool, area_id = does_mesh_have_a_bad_area(node_coords, p_elem2nodes, elem2nodes, max_area)
+                if area_bool:
+                    result, nodeid1, nodeid2 = does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, area_id)
+                    if result:
+                        node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+                    else:
+                        plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
+                        plot_elem(node_coords, p_elem2nodes, elem2nodes, i, colorname='green')
+                        plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
+                        matplotlib.pyplot.title('Test for Ruppert algorithm')
+                        matplotlib.pyplot.savefig('Test for Ruber algorithm n=' + str(n))
+                        node_coords, p_elem2nodes, elem2nodes = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, area_id)
+                    i = 0
+                    n += 1
+                    trigger = True
+        if not trigger:
+            result, nodeid1, nodeid2 = does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, i)
+            if result:
+                node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+                i = 0
+                n += 1
+            else: i += 1
     return node_coords, p_elem2nodes, elem2nodes
 
-def _test_apply_Rupper_algorithm():
+def _test_apply_Ruppert_algorithm():
     point_coords = np.array([
         [0, 0],
         [0, 2],
@@ -286,12 +347,12 @@ def _test_apply_Rupper_algorithm():
     node_coords, p_elem2nodes, elem2nodes = apply_constrained_non_convex_Delaunay_triangulation(point_coords, constraints, borders)
     # plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
     # plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-    # matplotlib.pyplot.title('Test for Rupper algorithm')
+    # matplotlib.pyplot.title('Test for Ruppert algorithm')
     # matplotlib.pyplot.show()
-    node_coords, p_elem2nodes, elem2nodes = apply_Rupper_algorithm(point_coords, constraints, borders, max_area, min_angle)
+    node_coords, p_elem2nodes, elem2nodes = apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle)
     # plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
     # plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-    # matplotlib.pyplot.title('Test for Rupper algorithm')
+    # matplotlib.pyplot.title('Test for Ruppert algorithm')
     # matplotlib.pyplot.show()
             
 def test():
@@ -310,5 +371,5 @@ if __name__ == "__main__":
     # _test_split_segment()
     # _test_add_node_at_circumcenter()
     # _test_is_edge_in_a_diametral_circle()
-    _test_apply_Rupper_algorithm()
+    _test_apply_Ruppert_algorithm()
     pass
