@@ -94,6 +94,7 @@ def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e
     first_aligned_point = len(node_coords)
     intersecting_edges = np.array([], dtype=np.int64)
     intersecting_triangles = np.array([], dtype=np.int64)
+    elem_id_added = np.array([], dtype=np.int64)
 
     j = 0 # looking for a triangle with e1
     # for all trianles with e1, either the triangle has also e2, either the triangle doesn't have e2
@@ -187,16 +188,24 @@ def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e
     
     for i in range(len(p_elem2nodes_left) - 1):
         node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, elem2nodes_left[p_elem2nodes_left[i]: p_elem2nodes_left[i + 1]])
+        elem_id_added = np.append(elem_id_added, len(p_elem2nodes) - 1)
 
     for i in range(len(p_elem2nodes_right) - 1):
         node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, elem2nodes_right[p_elem2nodes_right[i]: p_elem2nodes_right[i + 1]])
+        elem_id_added = np.append(elem_id_added, len(p_elem2nodes) - 1)
 
     if first_aligned_point < len(node_coords):
-        node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2)
+        if show_deleted:
+            node_coords, p_elem2nodes, elem2nodes, elem_deleted2, elem_added2 = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2, True)
+            intersecting_triangles = np.append(intersecting_triangles, elem_deleted2)
+            elem_id_added = np.append(elem_id_added, elem_added2)
+        else:
+            node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2)
+            
     if show_deleted:
-        return node_coords, p_elem2nodes, elem2nodes
+        return node_coords, p_elem2nodes, elem2nodes, intersecting_triangles, elem_id_added
     else:
-        return node_coords, p_elem2nodes, elem2nodes, intersecting_triangles
+        return node_coords, p_elem2nodes, elem2nodes
 
 
 def apply_constrained_Delaunay_triangulation(point_coords, nodesid, constraints):
