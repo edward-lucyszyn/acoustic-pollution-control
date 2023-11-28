@@ -85,7 +85,7 @@ def _test_is_quadrilateral_convex():
     print(is_quadrilateral_convex(node_coords, 0, 1, 2, 3))
 
 
-def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e2, show_deleted=False):
+def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e2):
     """Adds one constraint to the triangulation. It there is a point on the segment of the 
     constraint, the algorithm does as if there are two edges, from e1 to the point aligned 
     and fom the point aligned to e2."""
@@ -188,24 +188,14 @@ def add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, e1, e
     
     for i in range(len(p_elem2nodes_left) - 1):
         node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, elem2nodes_left[p_elem2nodes_left[i]: p_elem2nodes_left[i + 1]])
-        elem_id_added = np.append(elem_id_added, len(p_elem2nodes) - 1)
 
     for i in range(len(p_elem2nodes_right) - 1):
         node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, elem2nodes_right[p_elem2nodes_right[i]: p_elem2nodes_right[i + 1]])
-        elem_id_added = np.append(elem_id_added, len(p_elem2nodes) - 1)
 
     if first_aligned_point < len(node_coords):
-        if show_deleted:
-            node_coords, p_elem2nodes, elem2nodes, elem_deleted2, elem_added2 = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2, True)
-            intersecting_triangles = np.append(intersecting_triangles, elem_deleted2)
-            elem_id_added = np.append(elem_id_added, elem_added2)
-        else:
-            node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2)
-            
-    if show_deleted:
-        return node_coords, p_elem2nodes, elem2nodes, intersecting_triangles, elem_id_added
-    else:
-        return node_coords, p_elem2nodes, elem2nodes
+        node_coords, p_elem2nodes, elem2nodes = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, first_aligned_point, e2)
+
+    return node_coords, p_elem2nodes, elem2nodes
 
 
 def apply_constrained_Delaunay_triangulation(point_coords, nodesid, constraints):

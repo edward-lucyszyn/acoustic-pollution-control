@@ -132,14 +132,12 @@ def add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_ele
     if not is_inside_form(node_coords, borders, coords):
         return node_coords, p_elem2nodes, elem2nodes, np.array([])
     else:
-        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted, elem_id_added = add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, np.array([coords]), 0, True)
+        node_coords, p_elem2nodes, elem2nodes = add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, np.array([coords]), 0)
         i = 0
         while i < len(constraints): # for every constraints
-            node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2, elem_id_added2 = add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints[i][0], constraints[i][1])
-            elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
-            elem_id_added = np.append(elem_id_added, elem_id_added2)
+            node_coords, p_elem2nodes, elem2nodes= add_constraint_to_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints[i][0], constraints[i][1])
             i += 1
-    return node_coords, p_elem2nodes, elem2nodes, elem_id_deleted, elem_id_added
+    return node_coords, p_elem2nodes, elem2nodes
 
 def _test_add_node_to_non_convex_constrained_delaunay_triangulation():
     node_coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
@@ -189,22 +187,16 @@ def _test_add_node_to_non_convex_constrained_delaunay_triangulation2():
 
 def split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2):
     """Adds the midpoint of a segment into the triangulation. Continues until there is no node in diametral circles of this segment."""
-    elem_id_added = np.array([], dtype=np.int64)
-    elem_id_deleted = np.array([], dtype=np.int64)
     coords = (node_coords[nodeid1] + node_coords[nodeid2])/2
-    node_coords, p_elem2nodes, elem2nodes, elem_id_deleted, elem_added = add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints, borders, coords)
+    node_coords, p_elem2nodes, elem2nodes = add_node_to_non_convex_constrained_delaunay_triangulation(node_coords, p_elem2nodes, elem2nodes, constraints, borders, coords)
     new_index = len(node_coords) - 1
     result1 = does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, new_index)
     result2 = does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid2, new_index)
     if result1:
-        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2, elem_id_added2 = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, new_index)
-        elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
-        elem_id_added = np.append(elem_id_added, elem_id_added2)
+        node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, new_index)
     if result2:
-        node_coords, p_elem2nodes, elem2nodes, elem_id_deleted2, elem_id_added2 = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid2, new_index)
-        elem_id_deleted = np.append(elem_id_deleted, elem_id_deleted2)
-        elem_id_added = np.append(elem_id_added, elem_id_added2)
-    return node_coords, p_elem2nodes, elem2nodes, elem_id_deleted, elem_id_added
+        node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid2, new_index)
+    return node_coords, p_elem2nodes, elem2nodes
 
 def _test_split_segment():
     node_coords = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0.4, 0.5]])
@@ -219,7 +211,7 @@ def _test_split_segment():
     matplotlib.pyplot.title('Test for split_segment')
     matplotlib.pyplot.show()
 
-    node_coords, p_elem2nodes, elem2nodes, elem_id_deleted, elem_id_added = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+    node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
 
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes)
     plot_all_node(node_coords, p_elem2nodes, elem2nodes)
@@ -269,7 +261,24 @@ def _test_add_node_at_circumcenter():
     matplotlib.pyplot.show()
 
 
-def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle):
+def compute_elem_changes(old_p_elem2nodes, old_elem2nodes, new_p_elem2nodes, new_elem2nodes):
+    """Returns the numpy array of the indexes of the element deleted and the index of the new elements."""
+    m = 0
+    added_elem = np.array([], dtype=np.int64)
+    old_to_new = np.array([], dtype=np.int64)
+    for i in range(len(old_p_elem2nodes) - 1):
+        if m < len(new_p_elem2nodes) - 1 and (old_elem2nodes[old_p_elem2nodes[i]: old_p_elem2nodes[i+1]] == new_elem2nodes[new_p_elem2nodes[m]: new_p_elem2nodes[m+1]]).all() == True:
+            old_to_new = np.append(old_to_new, m)
+            m += 1
+        else:
+            old_to_new = np.append(old_to_new, -1)
+    while m < len(new_p_elem2nodes) - 1:
+        added_elem = np.append(added_elem, m)
+        m += 1
+    return added_elem, old_to_new
+
+
+def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle, max_iter=100):
     """Apply the Ruppert algorithm with counstraints and borders. Every triangle will have 
     an area under max_area and angles over min_angle. min_angle is in degree."""
     node_coords, p_elem2nodes, elem2nodes = apply_constrained_non_convex_Delaunay_triangulation(point_coords, constraints, borders)
@@ -280,59 +289,35 @@ def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_an
         if is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, i, max_area, min_angle) or does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, i)[-1]:
            elem_to_replace = np.append(elem_to_replace, i)
     
-    elem_deleted = np.array([], dtype=np.int64)
-    elem_added = np.array([], dtype=np.int64)
-    while len(elem_to_replace) > 0:
-        plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
-        plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')    
-        for id in elem_to_replace[1:]:
-            plot_elem(node_coords, p_elem2nodes, elem2nodes, id, "blue")
-        plot_elem(node_coords, p_elem2nodes, elem2nodes, elem_to_replace[0], "green")
-        matplotlib.pyplot.title('Ruppert algorithm at step=' + str(n))
-        matplotlib.pyplot.show()
+    while n < max_iter and len(elem_to_replace) > 0:
+        changed = False
         elemid = elem_to_replace[0]
         elem = elem2nodes[p_elem2nodes[elemid]: p_elem2nodes[elemid + 1]]
+        old_p_elem2nodes, old_elem2nodes = p_elem2nodes, elem2nodes
         for i in range(3):
             nodeid1, nodeid2 = elem[i], elem[(i+1)%3]
-            if does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, nodeid2):
-                node_coords, p_elem2nodes, elem2nodes, elem_deleted2, elem_added2 = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
-                elem_deleted = np.append(elem_deleted, elem_deleted2)
-                elem_added = np.append(elem_added, elem_added2)
+            if not changed and does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, nodeid2):
+                node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+                changed = True
 
-        if is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, elemid, max_area, min_angle):
-            node_coords, p_elem2nodes, elem2nodes, elem_deleted2, elem_added2 = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, elemid)
-            elem_deleted = np.append(elem_deleted, elem_deleted2)
-            elem_added = np.append(elem_added, elem_added2)
+        if not changed and is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, elemid, max_area, min_angle):
+            node_coords, p_elem2nodes, elem2nodes = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, elemid)
+            changed = True
 
-        if elem_to_replace[0] not in elem_deleted:
-            elem_deleted = np.append(elem_deleted, elem_to_replace[0])
+        if changed:
+            elem_added, old_to_new = compute_elem_changes(old_p_elem2nodes, old_elem2nodes, p_elem2nodes, elem2nodes)
 
-        elem_deleted = np.sort(elem_deleted)
-        elem_added = np.sort(elem_added)
+            new_elem_to_replace = np.array([], dtype=np.int64)
+            for i in range(len(elem_to_replace)):
+                if old_to_new[elem_to_replace[i]] != -1:
+                    new_elem_to_replace = np.append(new_elem_to_replace, old_to_new[elem_to_replace[i]])
+                
+            for id in elem_added:
+                if is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, id, max_area, min_angle) or does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, id)[-1]:
+                    elem_to_replace = np.append(elem_to_replace, id)
 
-        for id in elem_added:
-            if is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, id, max_area, min_angle) or does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, id)[-1]:
-                elem_to_replace = np.append(elem_to_replace, id)
-
-        plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
-        plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-        print(elem_added)
-        for id in elem_added:
-            plot_elem(node_coords, p_elem2nodes, elem2nodes, id, "blue")
-        matplotlib.pyplot.title('New Ruppert algorithm at step=' + str(n))
-        matplotlib.pyplot.show()
-            
-        marker = 0
-        shift = np.array([], dtype=np.int64)
-        for i in range(len(p_elem2nodes) - 1):
-            if marker < len(elem_deleted) and i == elem_deleted[marker]:
-                marker += 1
-            shift = np.append(shift, marker)
-
-        for i in range(len(elem_to_replace)):
-            elem_to_replace[i] -= shift[elem_to_replace[i]]
-
-        elem_to_replace = elem_to_replace[1:]
+        else:
+            elem_to_replace = elem_to_replace[1:]
         n += 1
 
     return node_coords, p_elem2nodes, elem2nodes
@@ -351,7 +336,7 @@ def _test_apply_Ruppert_algorithm():
     constraints = np.array([])
     borders = np.array([[0, 1, 2, 3], [4, 5, 6, 7]])
     max_area = np.infty
-    min_angle = 45
+    min_angle = 22
 
     node_coords, p_elem2nodes, elem2nodes = apply_constrained_non_convex_Delaunay_triangulation(point_coords, constraints, borders)
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')

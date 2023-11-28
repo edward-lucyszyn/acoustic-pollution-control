@@ -56,7 +56,7 @@ def _test_solve_Helmholtz_equation():
     point_coords = np.array([[0, 1], [1, 1], [1, 0], [0, 0]])
     border = np.array([0, 1, 2, 3])
     point_coords, border = generate_fractal_border(point_coords, border, motif, 2)
-    
+    constraints = np.array([])
     # border = np.append(border, np.array([2, 3]))
     nodes_on_boundary = np.array([3, 0])
     node_coords, p_elem2nodes, elem2nodes = apply_non_convex_Delaunay_triangulation(point_coords, np.array([border]))

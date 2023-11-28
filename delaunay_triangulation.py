@@ -80,13 +80,12 @@ def _test_construct_fictive_triangle():
     matplotlib.pyplot.show()
 
 
-def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_coords, pointid, show_changes=False):
+def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_coords, pointid):
     """Add one point to the Delaunay triangulation. The point coordinates are in the array point_coords 
     at the index pointid."""
     node_coords, p_elem2nodes, elem2nodes = add_node_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([point_coords[pointid]]))
     nodeid = len(node_coords) - 1
     elem_id_to_delete = np.array([], dtype=np.int64)
-    elem_id_added = np.array([], dtype=np.int64)
     triangles_to_delete = []
     # find the triangles where point whose id is pointid is in the circumcircle
     for i in range(len(p_elem2nodes) - 1):
@@ -94,14 +93,6 @@ def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_
         if is_in_circumcenter(node_coords, nodes_id):
             elem_id_to_delete = np.append(elem_id_to_delete, i)
             triangles_to_delete.append(elem2nodes[p_elem2nodes[i]:p_elem2nodes[i+1]])
-
-    # plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
-    # plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
-    # for elemid in elem_id_to_delete:
-    #     plot_elem(node_coords, p_elem2nodes, elem2nodes, elemid, colorname='blue')
-    # matplotlib.pyplot.plot(point_coords[pointid][0], point_coords[pointid][1], 'bo', color='blue')
-    # matplotlib.pyplot.title('Test for finding')
-    # matplotlib.pyplot.show(
 
     # then the all the points ot the triangles that we removed form a connex polygon whose sides need to be joined with the new point to construct triangles
     all_sides = []
@@ -128,16 +119,11 @@ def add_one_point_to_triangulation(node_coords, p_elem2nodes, elem2nodes, point_
             else:
                 node_coords, p_elem2nodes, elem2nodes = add_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, np.array([points[0], nodeid, points[1]]))
 
-            elem_id_added = np.append(elem_id_added, len(p_elem2nodes) - 1 - len(elem_id_to_delete))
-
     # removing the triangles to the mesh
     for elem_id in  np.sort(elem_id_to_delete)[::-1]:
         node_coords, p_elem2nodes, elem2nodes = remove_elem_to_mesh(node_coords, p_elem2nodes, elem2nodes, elem_id)
 
-    if show_changes:
-        return node_coords, p_elem2nodes, elem2nodes, elem_id_to_delete, elem_id_added
-    else:
-        return node_coords, p_elem2nodes, elem2nodes
+    return node_coords, p_elem2nodes, elem2nodes
 
 def _test_add_one_point_to_triangulation():
     nbre = 20
