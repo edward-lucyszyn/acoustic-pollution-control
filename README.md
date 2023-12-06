@@ -1,2 +1,2 @@
-# Acoustic Pollution Control: Solving Helmholtz equation and Ruppert Algorithm
+# Solving Helmholtz equation and Ruppert Algorithm
 
