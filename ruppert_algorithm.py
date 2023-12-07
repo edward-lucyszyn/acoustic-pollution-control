@@ -322,6 +322,79 @@ def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_an
 
     return node_coords, p_elem2nodes, elem2nodes
 
+def apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle, max_iter=100):
+    """Apply the Ruppert algorithm with counstraints and borders. Every triangle will have 
+    an area under max_area and angles over min_angle. min_angle is in degree."""
+    node_coords, p_elem2nodes, elem2nodes = apply_constrained_non_convex_Delaunay_triangulation(point_coords, constraints, borders)
+    elem_to_replace_split = np.array([], dtype=np.int64)
+    elem_to_replace_circum = np.array([], dtype=np.int64)
+    n = 0
+
+    for i in range(len(p_elem2nodes) - 1):
+        if does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, i)[-1]:
+            elem_to_replace_split = np.append(elem_to_replace_split, i)
+        elif is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, i, max_area, min_angle):
+            elem_to_replace_circum = np.append(elem_to_replace_circum, i)
+    
+    while n < max_iter and (len(elem_to_replace_split) > 0 or len(elem_to_replace_circum) > 0):
+        changed = False
+        if len(elem_to_replace_split) > 0:
+            elemid = elem_to_replace_split[0]
+            r = 1
+        else:
+            elemid = elem_to_replace_circum[0]
+            r = 2
+
+        plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
+        plot_elem(node_coords, p_elem2nodes, elem2nodes, elemid, colorname='red')
+        if r == 1:
+            matplotlib.pyplot.title('Test for Ruppert algorithm: split segment')
+        else:
+            matplotlib.pyplot.title('Test for Ruppert algorithm: add node at circumcenter')
+        matplotlib.pyplot.show()
+
+        elem = elem2nodes[p_elem2nodes[elemid]: p_elem2nodes[elemid + 1]]
+        old_p_elem2nodes, old_elem2nodes = p_elem2nodes, elem2nodes
+
+        if r == 1:
+            for i in range(3):
+                nodeid1, nodeid2 = elem[i], elem[(i+1)%3]
+                if does_edge_have_a_node_in_its_diametral_circle(node_coords, p_elem2nodes, elem2nodes, nodeid1, nodeid2):
+                    node_coords, p_elem2nodes, elem2nodes = split_segment(node_coords, p_elem2nodes, elem2nodes, constraints, borders, nodeid1, nodeid2)
+                    changed = True
+
+        if r == 2:
+            if is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, elemid, max_area, min_angle):
+                node_coords, p_elem2nodes, elem2nodes = add_node_at_circumcenter(node_coords, p_elem2nodes, elem2nodes, constraints, borders, elemid)
+                changed = True
+
+        if changed:
+            elem_added, old_to_new = compute_elem_changes(old_p_elem2nodes, old_elem2nodes, p_elem2nodes, elem2nodes)
+
+            new_elem_to_replace_split = np.array([], dtype=np.int64)
+            for i in range(len(elem_to_replace_split)):
+                if old_to_new[elem_to_replace_split[i]] != -1:
+                    new_elem_to_replace_split = np.append(new_elem_to_replace_split, old_to_new[elem_to_replace_split[i]])
+
+            new_elem_to_replace_circum = np.array([], dtype=np.int64)
+            for i in range(len(elem_to_replace_circum)):
+                if old_to_new[elem_to_replace_circum[i]] != -1:
+                    new_elem_to_replace_circum = np.append(new_elem_to_replace_circum, old_to_new[elem_to_replace_circum[i]])
+                
+            for id in elem_added:
+                if does_element_have_a_wrong_edge(node_coords, p_elem2nodes, elem2nodes, id)[-1]:
+                    elem_to_replace_split = np.append(elem_to_replace_split, id)
+                elif is_a_bad_triangle(node_coords, p_elem2nodes, elem2nodes, id, max_area, min_angle):
+                    elem_to_replace_circum = np.append(elem_to_replace_circum, id)
+            n += 1
+
+        else:
+            if r == 1:
+                elem_to_replace_split = elem_to_replace_split[1:]
+            else:
+                elem_to_replace_circum = elem_to_replace_circum[1:]
+
+    return node_coords, p_elem2nodes, elem2nodes
 
 def _test_apply_Ruppert_algorithm():
     point_coords = np.array([
@@ -330,7 +403,7 @@ def _test_apply_Ruppert_algorithm():
         [2, 2],
         [2, 0],
         [0.5, 1],
-        [1, 1],
+        [1, 1.5],
         [1, 0.5],
         [0.5, 0.5]])
     constraints = np.array([])
@@ -367,7 +440,6 @@ def _test_apply_Ruppert_algorithm2():
     matplotlib.pyplot.show()
     node_coords, p_elem2nodes, elem2nodes = apply_Ruppert_algorithm(point_coords, constraints, borders, max_area, min_angle)
     plot_all_elem(node_coords, p_elem2nodes, elem2nodes, colorname='orange')
-    plot_all_node(node_coords, p_elem2nodes, elem2nodes, colorname='red')
     matplotlib.pyplot.title('Test for Ruppert algorithm')
     matplotlib.pyplot.show()
 
@@ -388,6 +460,6 @@ if __name__ == "__main__":
     # _test_split_segment()
     # _test_add_node_at_circumcenter()
     # _test_is_edge_in_a_diametral_circle()
-    _test_apply_Ruppert_algorithm()
-    # _test_apply_Ruppert_algorithm2()
+    # _test_apply_Ruppert_algorithm()
+    _test_apply_Ruppert_algorithm2()
     pass
